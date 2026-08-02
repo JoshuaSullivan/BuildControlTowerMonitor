@@ -6,8 +6,8 @@ enum StatusClientError: Error, Equatable {
     case badStatus(code: Int)
 }
 
-/// A tiny async client that fetches the daemon's JSON queue snapshot from
-/// `GET /status`.
+/// A tiny async client for the daemon's read-only JSON endpoints: the queue
+/// snapshot at `GET /status` and the timing policy at `GET /config`.
 ///
 /// It uses an ephemeral, cache-disabled `URLSession`: `URLSession` will
 /// otherwise cache a loopback `200` response, and the monitor would then freeze
@@ -19,8 +19,12 @@ nonisolated struct StatusClient: Sendable {
     /// The session used for requests.
     let session: URLSession
 
-    /// The endpoint path appended to ``baseURL``.
+    /// The queue-snapshot endpoint path appended to ``baseURL``.
     private static let statusPath = "status"
+
+    /// The configuration endpoint path appended to ``baseURL``. Absent on
+    /// daemons older than `0.3.0`, which answer `404`.
+    private static let configPath = "config"
 
     /// A short per-request timeout so a hung daemon never stalls the UI.
     private static let requestTimeout: TimeInterval = 2
@@ -48,7 +52,22 @@ nonisolated struct StatusClient: Sendable {
     ///   error for a malformed body. The caller collapses any of these to an
     ///   "offline" state.
     func fetch() async throws -> StatusDTO {
-        var request = URLRequest(url: baseURL.appending(path: Self.statusPath))
+        try await get(Self.statusPath)
+    }
+
+    /// Fetch and decode the daemon's timing policy.
+    ///
+    /// - Throws: the same errors as ``fetch()``. A `404` here means a daemon
+    ///   predating the endpoint, so the caller keeps using
+    ///   ``DaemonConfig/fallback`` rather than treating this as a fatal error —
+    ///   the queue snapshot, not this call, is the liveness signal.
+    func fetchConfig() async throws -> DaemonConfig {
+        try await get(Self.configPath)
+    }
+
+    /// Issue a `GET` against a daemon path and decode the JSON body.
+    private func get<Payload: Decodable>(_ path: String) async throws -> Payload {
+        var request = URLRequest(url: baseURL.appending(path: path))
         request.timeoutInterval = Self.requestTimeout
         request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
 
@@ -59,6 +78,6 @@ nonisolated struct StatusClient: Sendable {
         guard http.statusCode == 200 else {
             throw StatusClientError.badStatus(code: http.statusCode)
         }
-        return try JSONDecoder().decode(StatusDTO.self, from: data)
+        return try JSONDecoder().decode(Payload.self, from: data)
     }
 }
