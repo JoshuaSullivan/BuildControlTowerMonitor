@@ -24,7 +24,25 @@ APP_NAME="BuildControlTowerMonitor.app"
 INSTALL_DIR="$HOME/Applications"
 DERIVED="$(pwd)/.build"
 
+# Pin the architecture so xcodebuild stops warning that "My Mac" matches both the
+# arm64 and x86_64 slices of the same machine.
+DESTINATION="platform=macOS,arch=$(uname -m)"
+
+# Xcode 26 logs several harmless diagnostics on every invocation. They read like
+# failures and have sent people chasing a build that is actually fine, so drop
+# them and let xcodebuild's exit status be the sole verdict.
+XCODEBUILD_NOISE='DVTDeviceOperation: Encountered a build number|IDERunDestination: Supported platforms|IDETestOperationsObserverDebug'
+
 RUN_TESTS=1
+
+# Run xcodebuild with the noise filtered out. pipefail keeps xcodebuild's status
+# authoritative, and --line-buffered keeps output flowing during long builds.
+run_xcodebuild() {
+    if ! xcodebuild "$@" 2>&1 | { grep --line-buffered -v -E "$XCODEBUILD_NOISE" || true; }; then
+        echo "error: xcodebuild failed; see the output above." >&2
+        exit 1
+    fi
+}
 
 usage() {
     cat <<USAGE
@@ -112,14 +130,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "$RUN_TESTS" -eq 1 ]]; then
-    echo "==> Running tests..."
-    xcodebuild test -project "$PROJECT" -scheme "$SCHEME" \
-        -destination 'platform=macOS' -quiet
+    echo "==> Running tests (this takes a couple of minutes)..."
+    run_xcodebuild test -project "$PROJECT" -scheme "$SCHEME" \
+        -destination "$DESTINATION" -quiet
 fi
 
 echo "==> Building release app..."
-xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
-    -derivedDataPath "$DERIVED" -destination 'platform=macOS' -quiet build
+run_xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Release \
+    -derivedDataPath "$DERIVED" -destination "$DESTINATION" -quiet build
 
 APP_SRC="$DERIVED/Build/Products/Release/$APP_NAME"
 [[ -d "$APP_SRC" ]] || { echo "error: built app not found at $APP_SRC" >&2; exit 1; }
