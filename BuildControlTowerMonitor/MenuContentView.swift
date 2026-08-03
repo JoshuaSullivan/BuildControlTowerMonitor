@@ -7,6 +7,9 @@ struct MenuContentView: View {
     /// The shared model, injected by the app.
     @Environment(BuildStatusModel.self) private var model
 
+    /// Opens the app's auxiliary `Window` scenes (Daemon Control, About).
+    @Environment(\.openWindow) private var openWindow
+
     /// Cap on the waiting list's height so a deep queue scrolls instead of
     /// growing the panel off the bottom of the screen.
     private static let waitingListMaxHeight: CGFloat = 160
@@ -53,6 +56,18 @@ struct MenuContentView: View {
                     .scrollBounceBehavior(.basedOnSize)
                     .frame(maxHeight: Self.waitingListMaxHeight)
                 }
+            }
+
+            Divider()
+
+            Button("Daemon Control…", systemImage: "gearshape") {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: WindowID.daemonControl)
+            }
+
+            Button("About", systemImage: "info.circle") {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: WindowID.about)
             }
 
             Divider()
