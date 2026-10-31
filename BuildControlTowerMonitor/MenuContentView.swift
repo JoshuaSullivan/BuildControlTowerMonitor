@@ -10,10 +10,6 @@ struct MenuContentView: View {
     /// Opens the app's auxiliary `Window` scenes (Daemon Control, About).
     @Environment(\.openWindow) private var openWindow
 
-    /// Cap on the waiting list's height so a deep queue scrolls instead of
-    /// growing the panel off the bottom of the screen.
-    private static let waitingListMaxHeight: CGFloat = 160
-
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Build Control Tower")
@@ -41,21 +37,7 @@ struct MenuContentView: View {
             }
 
             if !model.waiting.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Waiting (\(model.waiting.count))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(model.waiting.enumerated(), id: \.element.id) { index, entry in
-                                WaitingBuildRowView(position: index + 1, entry: entry)
-                            }
-                        }
-                    }
-                    .scrollIndicators(.hidden)
-                    .scrollBounceBehavior(.basedOnSize)
-                    .frame(maxHeight: Self.waitingListMaxHeight)
-                }
+                WaitingBuildListView(entries: model.waiting)
             }
 
             Divider()
